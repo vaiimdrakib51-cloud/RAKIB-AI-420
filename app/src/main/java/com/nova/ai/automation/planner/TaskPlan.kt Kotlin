@@ -1,0 +1,22 @@
+package com.nova.ai.automation.planner
+
+enum class TaskStatus {
+    PENDING,
+    RUNNING,
+    COMPLETED,
+    FAILED,
+    CANCELLED
+}
+
+data class TaskStep(
+    val id: String = java.util.UUID.randomUUID().toString(),
+    val action: String,
+    val parameter: String,
+    var status: TaskStatus = TaskStatus.PENDING,
+    var errorMessage: String? = null
+)
+
+data class ExecutionPlan(
+    val originalCommand: String,
+    val steps: List<TaskStep>
+)
