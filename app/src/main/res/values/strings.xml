@@ -1,0 +1,10 @@
+<resources>
+    <string name="app_name">NOVA AI</string>
+    <string name="accessibility_service_description">NOVA AI uses this accessibility service to understand supported on-screen interfaces and perform authorized phone navigation tasks on your explicit request.</string>
+    <string name="notification_channel_voice_name">NOVA Continuous Voice Service</string>
+    <string name="notification_channel_voice_desc">Shows persistent status while NOVA is listening for voice commands</string>
+    <string name="notification_channel_overlay_name">NOVA Floating Overlay Engine</string>
+    <string name="notification_channel_overlay_desc">Shows floating assistant screen controller status</string>
+    <string name="notification_channel_task_name">NOVA Automation Task Tracker</string>
+    <string name="notification_channel_task_desc">Displays real-time multi-command automation progress</string>
+</resources>
