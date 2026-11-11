@@ -13,7 +13,6 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
-import java.util.Locale
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -43,7 +42,10 @@ class VoiceRecognitionManager @Inject constructor(
 
         val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-            putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault())
+            // প্রধান ভাষা হিসেবে বাংলা সেট করা
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE, "bn-BD")
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, "bn-BD")
+            putExtra("android.speech.extra.EXTRA_ADDITIONAL_LANGUAGES", arrayOf("bn-BD", "en-US"))
             putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, false)
         }
 
