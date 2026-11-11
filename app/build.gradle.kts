@@ -115,7 +115,7 @@ dependencies {
 
     // AI & ML Kit Vision OCR
     implementation(libs.google.generativeai)
-    implementation(libs.mlkit.text-recognition)
+    implementation(libs.mlkit.text.recognition)
 
     // Compose Tooling Debug
     debugImplementation(libs.androidx.compose.ui.tooling)
