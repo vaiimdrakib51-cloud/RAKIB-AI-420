@@ -13,62 +13,93 @@ class GeminiProvider @Inject constructor(
 
     override val providerName: String = "Google Gemini"
 
-    private suspend fun getGenerativeModel(): GenerativeModel {
-        val apiKey = dataStoreManager.geminiApiKeyFlow.first()
-        val keyToUse = apiKey.ifBlank { "GEMINI_FALLBACK_API_KEY_STUB" }
-
-        // গুগলের সবচেয়ে দ্রুত এবং ফ্রি-টিয়ার সমর্থিত ফ্ল্যাশ মডেল
-        return GenerativeModel(
-            modelName = "gemini-1.5-flash",
-            apiKey = keyToUse
-        )
-    }
+    // গুগলের সক্রিয় আধুনিক মডেলগুলোর তালিকা (একটি না পেলে স্বয়ংক্রিয়ভাবে অন্যটি চলবে)
+    private val candidateModels = listOf(
+        "gemini-2.5-flash",
+        "gemini-2.0-flash",
+        "gemini-2.0-flash-exp",
+        "gemini-1.5-flash-latest"
+    )
 
     override suspend fun generateResponse(prompt: String): String {
-        return try {
-            val model = getGenerativeModel()
-            val systemContext = """
-                You are NOVA AI, an advanced Android Personal Assistant.
-                You are helpful, precise, technical, and polite.
-                You understand Bengali and English seamlessly. Respond in the language used by the user.
-            """.trimIndent()
-
-            val response = model.generateContent("$systemContext\n\nUser: $prompt")
-            response.text ?: "I am unable to formulate a response at this moment."
-        } catch (e: Exception) {
-            "NOVA Brain Communication Error: ${e.localizedMessage ?: "Unknown error"}"
+        val apiKey = dataStoreManager.geminiApiKeyFlow.first()
+        val keyToUse = apiKey.trim()
+        if (keyToUse.isBlank()) {
+            return "অনুগ্রহ করে সেটিংস (Settings) থেকে আপনার সঠিক Gemini API Key যুক্ত করুন।"
         }
+
+        val systemContext = """
+            You are NOVA AI, an advanced Android Personal Assistant.
+            You are helpful, precise, technical, and polite.
+            Always understand Bengali and English seamlessly. Respond in natural, polite Bengali when the user speaks or writes in Bengali.
+        """.trimIndent()
+
+        var lastErrorMessage = ""
+
+        // স্বয়ংক্রিয়ভাবে সক্রিয় মডেল খুঁজে বের করে উত্তর তৈরি করা
+        for (modelName in candidateModels) {
+            try {
+                val model = GenerativeModel(
+                    modelName = modelName,
+                    apiKey = keyToUse
+                )
+                val response = model.generateContent("$systemContext\n\nUser: $prompt")
+                val text = response.text
+                if (!text.isNullOrBlank()) {
+                    return text
+                }
+            } catch (e: Exception) {
+                lastErrorMessage = e.localizedMessage ?: e.message ?: "Unknown error"
+                // এই মডেলে সমস্যা হলে লুপের পরবর্তী মডেলে চেষ্টা করবে
+            }
+        }
+
+        return "NOVA Brain Communication Error: $lastErrorMessage"
     }
 
     override suspend fun planTaskSteps(userCommand: String): String {
-        return try {
-            val model = getGenerativeModel()
-            val taskPrompt = """
-                Decompose the following user instruction into a sequential list of steps for Android device execution.
-                Supported actions:
-                - OPEN_APP (parameter: app or package name)
-                - CLICK_ELEMENT (parameter: text or button label)
-                - WAIT (parameter: milliseconds, e.g. 2000)
-                - SCROLL_DOWN (parameter: empty or count)
-                - SCROLL_UP (parameter: empty or count)
-                - TYPE_TEXT (parameter: text to input)
-                
-                Instruction: "$userCommand"
-                
-                Respond ONLY with a valid JSON object matching this structure:
-                {
-                   "steps": [
-                      {"action": "OPEN_APP", "parameter": "Facebook"},
-                      {"action": "WAIT", "parameter": "2000"},
-                      {"action": "CLICK_ELEMENT", "parameter": "Reels"}
-                   ]
-                }
-            """.trimIndent()
+        val apiKey = dataStoreManager.geminiApiKeyFlow.first()
+        val keyToUse = apiKey.trim()
+        if (keyToUse.isBlank()) return "{ \"steps\": [] }"
 
-            val response = model.generateContent(taskPrompt)
-            response.text ?: "{ \"steps\": [] }"
-        } catch (e: Exception) {
-            "{ \"steps\": [] }"
+        val taskPrompt = """
+            Decompose the following user instruction into a sequential list of steps for Android device execution.
+            Supported actions:
+            - OPEN_APP (parameter: app or package name)
+            - CLICK_ELEMENT (parameter: text or button label)
+            - WAIT (parameter: milliseconds, e.g. 2000)
+            - SCROLL_DOWN (parameter: empty or count)
+            - SCROLL_UP (parameter: empty or count)
+            - TYPE_TEXT (parameter: text to input)
+            
+            Instruction: "$userCommand"
+            
+            Respond ONLY with a valid JSON object matching this structure:
+            {
+               "steps": [
+                  {"action": "OPEN_APP", "parameter": "Facebook"},
+                  {"action": "WAIT", "parameter": "2000"},
+                  {"action": "CLICK_ELEMENT", "parameter": "Reels"}
+               ]
+            }
+        """.trimIndent()
+
+        for (modelName in candidateModels) {
+            try {
+                val model = GenerativeModel(
+                    modelName = modelName,
+                    apiKey = keyToUse
+                )
+                val response = model.generateContent(taskPrompt)
+                val text = response.text
+                if (!text.isNullOrBlank()) {
+                    return text
+                }
+            } catch (_: Exception) {
+                // ব্যর্থ হলে পরবর্তী মডেলে চেষ্টা করবে
+            }
         }
+
+        return "{ \"steps\": [] }"
     }
 }
