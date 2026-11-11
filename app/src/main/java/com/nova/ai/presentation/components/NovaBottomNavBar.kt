@@ -68,7 +68,7 @@ fun NovaBottomNavBar(
                             interactionSource = remember { MutableInteractionSource() },
                             indication = null
                         ) { onItemClick(screen) },
-                    horizontalAlignment = Alignment.CenterVertically,
+                    horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center
                 ) {
                     Icon(
