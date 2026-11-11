@@ -8,6 +8,27 @@ import org.json.JSONObject
 import javax.inject.Inject
 import javax.inject.Singleton
 
+enum class TaskStatus {
+    PENDING,
+    RUNNING,
+    COMPLETED,
+    FAILED,
+    CANCELLED
+}
+
+data class TaskStep(
+    val id: String = java.util.UUID.randomUUID().toString(),
+    val action: String,
+    val parameter: String,
+    var status: TaskStatus = TaskStatus.PENDING,
+    var errorMessage: String? = null
+)
+
+data class ExecutionPlan(
+    val originalCommand: String,
+    val steps: List<TaskStep>
+)
+
 @Singleton
 class TaskPlanner @Inject constructor(
     private val aiRepository: AIRepository,
