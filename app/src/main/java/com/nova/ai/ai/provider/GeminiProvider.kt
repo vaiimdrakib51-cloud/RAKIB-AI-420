@@ -26,8 +26,8 @@ class GeminiProvider @Inject constructor(
         .readTimeout(30, TimeUnit.SECONDS)
         .build()
 
-    // গুগলের সক্রিয় আধুনিক মডেল
-    private val activeModel = "gemini-2.5-flash"
+    // গুগলের নির্দেশিত সর্বশেষ মডেল
+    private val activeModel = "gemini-3.8-flash"
 
     override suspend fun generateResponse(prompt: String): String = withContext(Dispatchers.IO) {
         val apiKey = dataStoreManager.geminiApiKeyFlow.first().trim()
