@@ -1,5 +1,9 @@
 package com.nova.ai.presentation.assistant
 
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
@@ -15,9 +19,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.nova.ai.R
 import com.nova.ai.domain.model.ChatMessage
@@ -28,9 +34,19 @@ import com.nova.ai.presentation.theme.*
 fun AssistantScreen(
     viewModel: AssistantViewModel = hiltViewModel()
 ) {
+    val context = LocalContext.current
     val uiState by viewModel.uiState.collectAsState()
     var inputText by remember { mutableStateOf("") }
     val listState = rememberLazyListState()
+
+    // মাইক্রোফোন পারমিশন হ্যান্ডলার
+    val recordAudioLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            viewModel.toggleVoiceListening()
+        }
+    }
 
     LaunchedEffect(uiState.messages.size) {
         if (uiState.messages.isNotEmpty()) {
@@ -183,7 +199,17 @@ fun AssistantScreen(
             Spacer(modifier = Modifier.width(8.dp))
 
             IconButton(
-                onClick = { viewModel.toggleVoiceListening() },
+                onClick = {
+                    val permissionCheck = ContextCompat.checkSelfPermission(
+                        context,
+                        Manifest.permission.RECORD_AUDIO
+                    )
+                    if (permissionCheck == PackageManager.PERMISSION_GRANTED) {
+                        viewModel.toggleVoiceListening()
+                    } else {
+                        recordAudioLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                    }
+                },
                 modifier = Modifier
                     .size(46.dp)
                     .clip(CircleShape)
