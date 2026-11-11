@@ -17,8 +17,9 @@ class GeminiProvider @Inject constructor(
         val apiKey = dataStoreManager.geminiApiKeyFlow.first()
         val keyToUse = apiKey.ifBlank { "GEMINI_FALLBACK_API_KEY_STUB" }
 
+        // গুগলের সবচেয়ে দ্রুত এবং ফ্রি-টিয়ার সমর্থিত ফ্ল্যাশ মডেল
         return GenerativeModel(
-            modelName = "gemini-1.5-pro",
+            modelName = "gemini-1.5-flash",
             apiKey = keyToUse
         )
     }
