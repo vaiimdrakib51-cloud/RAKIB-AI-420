@@ -1,7 +1,14 @@
 package com.nova.ai.presentation.assistant
 
 import android.Manifest
+import android.accessibilityservice.AccessibilityServiceInfo
+import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
+import android.os.Build
+import android.provider.Settings
+import android.view.accessibility.AccessibilityManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -20,32 +27,69 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
 import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import com.nova.ai.R
 import com.nova.ai.domain.model.ChatMessage
 import com.nova.ai.domain.model.MessageSender
 import com.nova.ai.presentation.theme.*
+
+// অ্যাক্সেসিবিলিটি সার্ভিস অন আছে কিনা চেক করার ফাংশন
+fun isAccessibilityServiceEnabled(context: Context): Boolean {
+    val am = context.getSystemService(Context.ACCESSIBILITY_SERVICE) as AccessibilityManager
+    val enabledServices = am.getEnabledAccessibilityServiceList(AccessibilityServiceInfo.FEEDBACK_ALL_MASK)
+    return enabledServices.any { it.resolveInfo.serviceInfo.packageName == context.packageName }
+}
 
 @Composable
 fun AssistantScreen(
     viewModel: AssistantViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
     val uiState by viewModel.uiState.collectAsState()
     var inputText by remember { mutableStateOf("") }
     val listState = rememberLazyListState()
 
-    // মাইক্রোফোন পারমিশন হ্যান্ডলার
+    // পারমিশন স্ট্যাটাস ট্র্যাক করার স্টেট
+    var isMicGranted by remember {
+        mutableStateOf(ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED)
+    }
+    var isAccessibilityGranted by remember {
+        mutableStateOf(isAccessibilityServiceEnabled(context))
+    }
+    var isOverlayGranted by remember {
+        mutableStateOf(if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) Settings.canDrawOverlays(context) else true)
+    }
+
+    // অ্যাপে ফিরে আসলে স্বয়ংক্রিয়ভাবে পারমিশন চেক করা
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                isMicGranted = ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+                isAccessibilityGranted = isAccessibilityServiceEnabled(context)
+                isOverlayGranted = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) Settings.canDrawOverlays(context) else true
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
+    // কোনো পারমিশন বাকি থাকলে পপ-আপ দেখাবে
+    val showPermissionModal = !isMicGranted || !isAccessibilityGranted || !isOverlayGranted
+
     val recordAudioLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
-    ) { isGranted ->
-        if (isGranted) {
-            viewModel.toggleVoiceListening()
-        }
+    ) { granted ->
+        isMicGranted = granted
     }
 
     LaunchedEffect(uiState.messages.size) {
@@ -54,6 +98,82 @@ fun AssistantScreen(
         }
     }
 
+    // === পারমিশন পপ-আপ মডাল ===
+    if (showPermissionModal) {
+        Dialog(onDismissRequest = { /* বাইরে চাপলে কাটবে না, পারমিশন আবশ্যক */ }) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(NovaCardBackground)
+                    .border(1.dp, NovaAccentCyan, RoundedCornerShape(20.dp))
+                    .padding(20.dp)
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                ) {
+                    Icon(
+                        painter = painterResource(id = R.drawable.ic_nova_logo),
+                        contentDescription = "Logo",
+                        tint = NovaAccentCyan,
+                        modifier = Modifier.size(42.dp)
+                    )
+
+                    Text(
+                        text = "প্রয়োজনীয় পারমিশন সেটআপ",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = NovaPrimaryText
+                    )
+
+                    Text(
+                        text = "NOVA AI দিয়ে আপনার ফোন কন্ট্রোল এবং অ্যাপ ওপেন করাতে নিচের পারমিশনগুলো চালু করুন:",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = NovaSecondaryText
+                    )
+
+                    // ১. অ্যাক্সেসিবিলিটি সার্ভিস বাটন
+                    PermissionItemRow(
+                        title = "১. ফোন কন্ট্রোল (Accessibility)",
+                        isGranted = isAccessibilityGranted,
+                        onClick = {
+                            val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).apply {
+                                flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                            }
+                            context.startActivity(intent)
+                        }
+                    )
+
+                    // ২. ডিসপ্লে ওভারলে বাটন
+                    PermissionItemRow(
+                        title = "২. স্ক্রিনের ওপর ডিসপ্লে (Overlay)",
+                        isGranted = isOverlayGranted,
+                        onClick = {
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                                val intent = Intent(
+                                    Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                                    Uri.parse("package:${context.packageName}")
+                                ).apply { flags = Intent.FLAG_ACTIVITY_NEW_TASK }
+                                context.startActivity(intent)
+                            }
+                        }
+                    )
+
+                    // ৩. মাইক্রোফোন বাটন
+                    PermissionItemRow(
+                        title = "৩. মুখের কথা শোনা (Microphone)",
+                        isGranted = isMicGranted,
+                        onClick = {
+                            recordAudioLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                        }
+                    )
+                }
+            }
+        }
+    }
+
+    // === প্রধান ড্যাশবোর্ড UI ===
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -200,11 +320,7 @@ fun AssistantScreen(
 
             IconButton(
                 onClick = {
-                    val permissionCheck = ContextCompat.checkSelfPermission(
-                        context,
-                        Manifest.permission.RECORD_AUDIO
-                    )
-                    if (permissionCheck == PackageManager.PERMISSION_GRANTED) {
+                    if (isMicGranted) {
                         viewModel.toggleVoiceListening()
                     } else {
                         recordAudioLauncher.launch(Manifest.permission.RECORD_AUDIO)
@@ -244,6 +360,43 @@ fun AssistantScreen(
                     modifier = Modifier.size(20.dp)
                 )
             }
+        }
+    }
+}
+
+@Composable
+fun PermissionItemRow(
+    title: String,
+    isGranted: Boolean,
+    onClick: () -> Unit
+) {
+    Button(
+        onClick = onClick,
+        enabled = !isGranted,
+        colors = ButtonDefaults.buttonColors(
+            containerColor = if (isGranted) NovaSuccess.copy(alpha = 0.2f) else NovaSecondaryBlue,
+            disabledContainerColor = NovaSuccess.copy(alpha = 0.15f)
+        ),
+        shape = RoundedCornerShape(12.dp),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = title,
+                color = if (isGranted) NovaSuccess else NovaPrimaryText,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Medium
+            )
+            Text(
+                text = if (isGranted) "অন করা আছে ✓" else "অন করুন →",
+                color = if (isGranted) NovaSuccess else NovaAccentCyan,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold
+            )
         }
     }
 }
